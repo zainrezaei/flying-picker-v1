@@ -25,6 +25,7 @@ class DetectionResult:
     contour: np.ndarray      # the raw contour points
     box_points: np.ndarray   # 4 corners of the rotated bounding box
     confidence: float = 0.0  # 0.0–1.0 detection confidence
+    part_id: str | None = None  # shape classification result (e.g. "Part_1")
 
 
 def _compute_confidence(contour: np.ndarray, area: float, w: float, h: float) -> float:

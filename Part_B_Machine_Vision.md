@@ -33,11 +33,20 @@ Second, a **homography transformation** is employed to map the undistorted 2D pi
 ### 5) Confidence-based detection filtering
 The minimum area threshold alone cannot prevent false positives on an empty belt — reflections, lighting gradients, and belt texture can produce contours large enough to pass. To solve this, each candidate contour is subjected to additional geometric gates: a **solidity** check (contour area ÷ convex hull area ≥ 0.80), an **aspect ratio** range (0.3–3.0), and a **maximum area** cap (200,000 px²). Contours that pass all gates receive a **confidence score** (0–1), computed as the average of solidity and rectangularity (contour area ÷ bounding box area). Only detections above a configurable confidence threshold (default 0.50) are accepted; everything below is discarded, preventing the system from sending spurious coordinates to the robot. All thresholds are tuneable in `config/vision_config.yaml`.
 
-### 6) Libraries and dependencies
+### 6) Shape classification
+With multiple workpiece variants travelling the conveyor, the system must not only locate a part but also identify *which* part it is. A **shape classification** stage (`src/vision/shape_classifier.py`) is inserted immediately after contour detection to solve this.
+
+At startup the classifier loads a set of reference images (`Part_1.jpg`, `Part_2.jpg`, …) from a configurable directory, converts each to a binary mask, and extracts its largest contour. During real-time operation, whenever a valid contour passes all detection gates, the classifier compares it against every reference using OpenCV's `cv2.matchShapes()` function. This function computes the distance between **Hu Moment** signatures — seven shape descriptors that are mathematically invariant to translation, rotation, and scale. The reference with the lowest distance score is selected as the match.
+
+A configurable **match threshold** (default 0.20) acts as a reject gate: if the best score exceeds this value, the part is labelled as *unknown*, preventing misclassification when an unexpected object appears. The resulting part identity (e.g. `Part_1`) is attached to the `DetectionResult` and propagated through the rest of the pipeline — appearing in the live overlay, the console log, and the robot send message.
+
+Because the classifier auto-discovers all `Part_*.jpg` / `Part_*.png` files in the reference directory, adding support for a new workpiece variant requires only placing a single reference photograph — no code changes are needed. The entire feature can be toggled via the `classification.enabled` flag in `config/vision_config.yaml`.
+
+### 7) Libraries and dependencies
 
 | Library | Purpose |
 |---------|---------|
-| **OpenCV** (`opencv-python`) | Core vision: image I/O, preprocessing, contour detection, camera calibration, homography, and live display |
+| **OpenCV** (`opencv-python`) | Core vision: image I/O, preprocessing, contour detection, shape matching, camera calibration, homography, and live display |
 | **NumPy** (`numpy`) | Array operations for frames and coordinate transforms; required by OpenCV internally |
 | **PyYAML** (`pyyaml`) | Parses the YAML configuration file so all parameters are editable without code changes |
 | **Picamera2** (`picamera2`) | Captures frames from the Raspberry Pi Global Shutter Camera (Sony IMX296) via `libcamera` |
@@ -83,6 +92,16 @@ To visually summarize the execution flow described above, Figure X illustrates t
 │                                        └───────┬──────────┘     │
 │                                                │                │
 │                                                ▼                │
+│                                        ┌──────────────────┐     │
+│                                        │ ShapeClassifier  │     │
+│                                        │ (if enabled)     │     │
+│                                        │                  │     │
+│                                        │ Hu Moment match  │     │
+│                                        │ vs Part_*.jpg    │     │
+│                                        │ → part_id        │     │
+│                                        └───────┬──────────┘     │
+│                                                │                │
+│                                                ▼                │
 │                     ┌──────────────┐   ┌──────────────────┐     │
 │                     │  compensate  │◀──│ pixel_to_world() │     │
 │                     │  _belt       │   │ (if homography   │     │
@@ -97,6 +116,7 @@ To visually summarize the execution flow described above, Figure X illustrates t
 │                   │ Draw overlay   │                            │
 │                   │ • Green box    │                            │
 │                   │ • Red centroid │                            │
+│                   │ • Part label   │                            │
 │                   │ • mm or px text│                            │
 │                   │ cv2.imshow()   │                            │
 │                   └────────────────┘                            │
@@ -110,8 +130,9 @@ To visually summarize the execution flow described above, Figure X illustrates t
 │ config.yaml  │   │ .json                 │   │                    │
 │              │   │                       │   │ Pixel → mm         │
 │ thresholds   │   │ Camera matrix +       │   │ transform matrix   │
-│ ROl, belt    │   │ distortion coeffs     │   │                    │
-│ display opts │   │ (from checkerboard)   │   │ (from ref points)  │
+│ ROI, belt,   │   │ distortion coeffs     │   │                    │
+│ classific.,  │   │ (from checkerboard)   │   │ (from ref points)  │
+│ display opts │   │                       │   │                    │
 └──────────────┘   └───────────────────────┘   └────────────────────┘
 
 ### Vision Pipeline Output Visualization

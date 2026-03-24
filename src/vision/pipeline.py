@@ -42,6 +42,7 @@ from .coordinate_transform import (
 )
 from .RTDEsender import Sender
 from .detection_tracker import DetectionTracker
+from .shape_classifier import ShapeClassifier
 
 # ------------------------------------------------------------------ #
 # Helpers                                                              #
@@ -80,19 +81,22 @@ def _draw_overlay(
     cx, cy = int(result.center_x), int(result.center_y)
     cv.circle(frame, (cx, cy), radius, centroid_color, -1)
 
+    # Part label prefix
+    part_tag = f"[{result.part_id}] " if result.part_id else ""
+
     # Text label — show world mm if available, else pixel
     if pick_coord is not None:
         label = (
-            f"pick=({pick_coord.x_mm:.1f}, {pick_coord.y_mm:.1f}) mm  "
+            f"{part_tag}pick=({pick_coord.x_mm:.1f}, {pick_coord.y_mm:.1f}) mm  "
             f"angle={pick_coord.angle_deg:.1f} deg"
         )
     elif world_coord is not None:
         label = (
-            f"({world_coord.x_mm:.1f}, {world_coord.y_mm:.1f}) mm  "
+            f"{part_tag}({world_coord.x_mm:.1f}, {world_coord.y_mm:.1f}) mm  "
             f"angle={world_coord.angle_deg:.1f} deg"
         )
     else:
-        label = f"x={cx}  y={cy}  angle={result.angle:.1f} deg"
+        label = f"{part_tag}x={cx}  y={cy}  angle={result.angle:.1f} deg"
 
     cv.putText(
         frame, label,
@@ -176,6 +180,18 @@ def run_pipeline(config_path: str | None = None):
 
     show_mask   = cfg["display"].get("show_mask", True)
     cfg_display = cfg["display"]
+
+    # --- Shape classification (optional) ---------------------------------
+    cls_cfg = cfg.get("classification", {})
+    classifier: ShapeClassifier | None = None
+    if cls_cfg.get("enabled", False):
+        ref_dir = os.path.join(_PROJECT_ROOT, cls_cfg.get("reference_dir", "."))
+        classifier = ShapeClassifier(
+            reference_dir=ref_dir,
+            threshold=cls_cfg.get("match_threshold", 0.20),
+            method=cls_cfg.get("method", 1),
+            thresh_value=cls_cfg.get("ref_thresh_value", 160),
+        )
 
     # Region of interest (crop frame edges to remove noise)
     roi_cfg = cfg.get("roi", None)
@@ -288,6 +304,12 @@ def run_pipeline(config_path: str | None = None):
         if result is not None and result.confidence < min_confidence:
             result = None
 
+        # Step 4b: Shape classification
+        if result is not None and classifier is not None:
+            cls_result = classifier.classify(result.contour)
+            if cls_result is not None:
+                result.part_id = cls_result.part_id
+
         # Step 5: Offset coordinates back to full frame
         if result is not None and use_roi:
             result.center_x += roi_x
@@ -341,8 +363,9 @@ def run_pipeline(config_path: str | None = None):
                     c = tracker_result.coord
                     rtde_sender.send_pose(c.x_mm, c.y_mm, c.angle_deg, 1.0)
                     object_present = True
+                    part_tag = f" part={result.part_id}" if result is not None and result.part_id else ""
                     print(f"[SEND] Pose sent to robot: x={c.x_mm:.1f} mm, "
-                          f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg")
+                          f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg{part_tag}")
                 elif object_present and coord is None and tracker.state == "IDLE":
                     rtde_sender.send_pose(0.2, 1.0, 0.0, 0)  # Indicate no object
                     object_present = False
@@ -364,6 +387,7 @@ def run_pipeline(config_path: str | None = None):
         if result is not None:
             _draw_overlay(frame, result, cfg_display, world_coord, pick_coord)
             dt_ms = (time.perf_counter() - t0) * 1000
+            prt = f"  part={result.part_id}" if result.part_id else ""
 
             if pick_coord is not None:
                 print(
@@ -372,7 +396,7 @@ def run_pipeline(config_path: str | None = None):
                     f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
                     f"pick=({pick_coord.x_mm:.1f},{pick_coord.y_mm:.1f}) mm  "
                     f"angle={pick_coord.angle_deg:.1f} deg  "
-                    f"conf={result.confidence:.2f}  "
+                    f"conf={result.confidence:.2f}{prt}  "
                     f"({dt_ms:.1f} ms)"
                 )
             elif world_coord is not None:
@@ -381,7 +405,7 @@ def run_pipeline(config_path: str | None = None):
                     f"px=({result.center_x:.0f},{result.center_y:.0f})  "
                     f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
                     f"angle={world_coord.angle_deg:.1f} deg  "
-                    f"conf={result.confidence:.2f}  "
+                    f"conf={result.confidence:.2f}{prt}  "
                     f"({dt_ms:.1f} ms)"
                 )
             else:
@@ -390,7 +414,7 @@ def run_pipeline(config_path: str | None = None):
                     f"x={result.center_x:7.1f}  "
                     f"y={result.center_y:7.1f}  "
                     f"angle={result.angle:6.1f} deg  "
-                    f"conf={result.confidence:.2f}  "
+                    f"conf={result.confidence:.2f}{prt}  "
                     f"({dt_ms:.1f} ms)"
                 )
         else:

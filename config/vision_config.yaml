@@ -30,6 +30,14 @@ roi:
   x_end: 1.0             # Right edge (1.0 = full width)
   y_end: 0.99              # Bottom edge (< 1.0 crops bottom noise)
 
+# --- Shape Classification (Hu Moment matching) ---
+classification:
+  enabled: true
+  reference_dir: "."              # directory containing Part_*.jpg / Part_*.png
+  match_threshold: 0.20           # max matchShapes score to accept (lower = stricter)
+  method: 1                       # cv2.matchShapes method (1 = CONTOURS_MATCH_I2)
+  ref_thresh_value: 160           # binary threshold for reference images
+
 # --- Calibration (checkerboard) ---
 # Used by run_camera_calibration.py. Pipeline auto-loads the result file.
 calibration:
