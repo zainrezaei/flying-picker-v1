@@ -36,7 +36,7 @@ picam2.start()
 while True:
     frame = picam2.capture_array()
 
-    cropped = frame[110:340, 0:640]
+    cropped = frame[150:450, 0:640]
     gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
 
     # Binary image (VERY important)
