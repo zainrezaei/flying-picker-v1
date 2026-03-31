@@ -1,6 +1,6 @@
 # Flying Picker — Vision System
 
-A computer-vision pipeline that detects a rectangular object on a conveyor belt, extracts its **position (x, y)** and **orientation (angle)**, and displays the results in a live overlay window. Designed as the "eyes" of a robotic pick-and-place system.
+A computer-vision pipeline that detects an object on a conveyor belt, extracts its **true center of mass (x, y)** and **orientation (angle)**, and displays the results in a live overlay window. Designed as the "eyes" of a robotic pick-and-place system.
 
 ---
 
@@ -61,10 +61,11 @@ flying-picker-v1/
 │   │   ├── preprocess.py          # Grayscale → blur → threshold → morphology
 │   │   ├── detection.py           # Contour detection → minAreaRect → (x, y, angle)
 │   │   ├── calibration.py         # Camera intrinsic calibration (undistortion)
+│   │   ├── shape_classifier.py    # Hu Moments-based multi-part classification
+│   │   ├── detection_tracker.py   # Debounce tracking (send one pose per physical part)
+│   │   ├── RTDEsender.py          # Universal Robots RTDE communication
 │   │   ├── coordinate_transform.py # Pixel→world homography + belt compensation
 │   │   └── pipeline.py            # Main loop — ties everything together + live overlay
-│   │
-│   └── robot/                     # (empty — future robot communication module)
 │
 ├── tests/                         # (empty — future unit/integration tests)
 │
@@ -111,8 +112,10 @@ flying-picker-v1/
 │                     │ BGR→Gray     │   │ Find contours   │     │
 │                     │ Gaussian blur│   │ Largest contour │     │
 │                     │ Binary thresh│   │ minAreaRect()   │     │
-│                     │ Morph close  │   │ → (x, y, θ) px  │     │
-│                     └──────────────┘   └───────┬──────────┘     │
+│                     │ Morph close  │   │ cv2.moments()   │     │
+│                     └──────────────┘   │ → true (x, y)   │     │
+│                                        │ minAreaRect(θ)  │     │
+│                                        └───────┬─────────┘     │
 │                                                │                │
 │                                                ▼                │
 │                     ┌──────────────┐   ┌──────────────────┐     │
@@ -126,7 +129,7 @@ flying-picker-v1/
 │                            │                                    │
 │                            ▼                                    │
 │                   ┌────────────────┐                            │
-│                   │ Draw overlay   │                            │
+│                   │ • Cyan outline │                            │
 │                   │ • Green box    │                            │
 │                   │ • Red centroid │                            │
 │                   │ • mm or px text│                            │
@@ -183,7 +186,8 @@ The binary mask is analysed to find the object's pose:
 | Find all contours | `cv2.findContours()` | List of contour point arrays |
 | Pick the largest | `max(contours, key=cv2.contourArea)` | Single contour |
 | Filter by min area | Area check (default 5000 px²) | Rejects noise |
-| Fit rotated rectangle | `cv2.minAreaRect()` | Center (x, y), size (w, h), angle (θ) |
+| True center of mass | `cv2.moments()` | Centroid (x, y) |
+| Fit rotated rectangle | `cv2.minAreaRect()` | Size (w, h), angle (θ) |
 | Get box corners | `cv2.boxPoints()` | 4 corner coordinates for drawing |
 
 Returns a `DetectionResult` dataclass:
@@ -203,9 +207,10 @@ DetectionResult(
 
 The pipeline draws on the original frame and shows it:
 
-- **Green rotated bounding box** — the detected rectangle outline
-- **Red dot** — centroid (x, y)
-- **White text** — `x=... y=... angle=...°`
+- **Cyan contour outline** — the actual true shape of the detected object
+- **Green rotated bounding box** — the detected rectangle enclosing the object
+- **Red dot** — true center of mass / centroid (x, y)
+- **White text** — `[Part_ID] pick=(X, Y) angle=...°`
 
 Two windows are shown:
 - **"Flying Picker — Detection"** — original frame with overlay
@@ -280,6 +285,14 @@ Once calibration files exist in `config/`, the pipeline will automatically use t
 All tunable parameters are in `config/vision_config.yaml`:
 
 ```yaml
+robot:
+  ip: "192.168.10.2"        # UR robot IP
+  port: 30004               # RTDE port
+  rtde_config_file: "rtde_config.xml"
+  max_connect_attempts: 5
+  reconnect_interval_frames: 10
+  no_object_signal: [0.2, 1.0, 0.0, 0.0]
+
 input:
   video_path: "public/IMG_6256.MOV"    # Video source
 
@@ -287,6 +300,7 @@ preprocess:
   blur_kernel_size: 5       # Gaussian blur kernel (must be odd)
   threshold_value: 100      # Binary threshold cutoff (0–255)
   threshold_max: 255        # Value for pixels above threshold
+  morph_kernel_size: 7      # Morphological close kernel
 
 detection:
   min_contour_area: 5000    # Ignore contours smaller than this (px²)
@@ -316,8 +330,9 @@ belt:                         # Conveyor compensation
 display:
   show_windows: true
   show_mask: true
-  overlay_color: [0, 255, 0]  # BGR green
-  centroid_color: [0, 0, 255] # BGR red
+  overlay_color: [0, 255, 0]  # BGR green (bounding box)
+  contour_color: [255, 255, 0] # BGR cyan (actual shape)
+  centroid_color: [0, 0, 255] # BGR red (center of mass)
   text_color: [255, 255, 255] # BGR white
 ```
 
@@ -335,11 +350,13 @@ display:
 
 | Component | File | Status |
 |-----------|------|--------|
-| Frame source (video file) | `src/vision/frame_source.py` | ✅ Done |
+| Frame source (video/Pi cam) | `src/vision/frame_source.py` | ✅ Done |
 | Preprocessing (threshold) | `src/vision/preprocess.py` | ✅ Done |
-| Object detection (contour) | `src/vision/detection.py` | ✅ Done |
+| Object detection (contour) | `src/vision/detection.py` | ✅ Done (true centroid) |
+| Shape classification | `src/vision/shape_classifier.py` | ✅ Done (Hu Moments) |
+| Multi-frame tracking | `src/vision/detection_tracker.py`| ✅ Done (debounce) |
 | Main pipeline + live overlay | `src/vision/pipeline.py` | ✅ Done |
-| Configuration system | `config/vision_config.yaml` | ✅ Done |
+| Configuration system | `config/vision_config.yaml` | ✅ Done (fully extracted) |
 | Entry point script | `run_vision.py` | ✅ Done |
 | Dependencies | `requirements.txt` | ✅ Updated |
 
