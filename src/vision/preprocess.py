@@ -14,6 +14,7 @@ def preprocess(
     blur_kernel: int = 5,
     thresh_value: int = 150,
     thresh_max: int = 255,
+    morph_kernel_size: int = 7,
 ) -> np.ndarray:
     """Convert a BGR frame to a binary mask.
 
@@ -33,6 +34,8 @@ def preprocess(
         Pixel intensity threshold (0-255).
     thresh_max : int
         Value assigned to pixels above threshold.
+    morph_kernel_size : int
+        Size of the morphological close kernel (fills small gaps).
 
     Returns
     -------
@@ -50,7 +53,9 @@ def preprocess(
     _, mask = cv.threshold(blurred, thresh_value, thresh_max, cv.THRESH_BINARY)
 
     # 4. Morphological close — fill small gaps inside the object
-    morph_kernel = cv.getStructuringElement(cv.MORPH_RECT, (7, 7))
+    morph_kernel = cv.getStructuringElement(
+        cv.MORPH_RECT, (morph_kernel_size, morph_kernel_size)
+    )
     mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, morph_kernel)
 
     return mask

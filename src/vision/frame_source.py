@@ -1,27 +1,33 @@
-import cv2 as cv
 from picamera2 import Picamera2
 
 
 class FrameSource:
     """Camera-based frame source using Picamera2."""
 
-    def __init__(self, path: str = None, loop: bool = True):
+    def __init__(
+        self,
+        path: str = None,
+        loop: bool = True,
+        width: int = 640,
+        height: int = 480,
+        fps: float = 30.0,
+    ):
         self._loop = loop
+        self._fps = fps
 
         self._camera = Picamera2()
         config = self._camera.create_preview_configuration(
-            main={"size": (640, 480)},
-            lores={"size": (640, 480)}
+            main={"size": (width, height)},
+            lores={"size": (width, height)}
         )
         self._camera.configure(config)
         self._camera.start()
-        #self._camera.start_preview(Fullscreen=False, window=(0, 0, 640, 480))
 
     # ---- properties ------------------------------------------------
 
     @property
     def fps(self) -> float:
-        return 30.0  # Picamera2 preview default
+        return self._fps
 
     @property
     def width(self) -> int:

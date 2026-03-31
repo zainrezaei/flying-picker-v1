@@ -15,7 +15,6 @@ Full processing chain:
 import os
 import sys
 import time
-import socket
 
 import cv2 as cv
 import numpy as np
@@ -68,16 +67,20 @@ def _draw_overlay(
 ) -> np.ndarray:
     """Draw bounding box, centroid, and text on the frame (in-place)."""
     overlay_color  = tuple(cfg_display.get("overlay_color", [0, 255, 0]))
+    contour_color  = tuple(cfg_display.get("contour_color", [255, 255, 0]))
     centroid_color = tuple(cfg_display.get("centroid_color", [0, 0, 255]))
     text_color     = tuple(cfg_display.get("text_color", [255, 255, 255]))
     thickness      = cfg_display.get("box_thickness", 2)
     radius         = cfg_display.get("centroid_radius", 6)
     font_scale     = cfg_display.get("font_scale", 0.6)
 
+    # Actual contour outline (real shape)
+    cv.drawContours(frame, [result.contour], 0, contour_color, thickness)
+
     # Rotated bounding box
     cv.drawContours(frame, [result.box_points], 0, overlay_color, thickness)
 
-    # Centroid
+    # Centroid (true center of mass)
     cx, cy = int(result.center_x), int(result.center_y)
     cv.circle(frame, (cx, cy), radius, centroid_color, -1)
 
@@ -129,15 +132,21 @@ def run_pipeline(config_path: str | None = None):
     """
     cfg = _load_config(config_path)
 
-    ROBOT_IP = "192.168.10.2"
-    ROBOT_PORT = 30004
-    config_file = "rtde_config.xml"
+    # --- Robot / RTDE connection (from config) -----------------------
+    robot_cfg = cfg.get("robot", {})
+    robot_ip = robot_cfg.get("ip", "192.168.10.2")
+    robot_port = robot_cfg.get("port", 30004)
+    rtde_config_file = os.path.join(
+        _PROJECT_ROOT, robot_cfg.get("rtde_config_file", "rtde_config.xml")
+    )
+    max_connect_attempts = robot_cfg.get("max_connect_attempts", 5)
+    no_object_signal = robot_cfg.get("no_object_signal", [0.2, 1.0, 0.0, 0.0])
+    reconnect_interval = robot_cfg.get("reconnect_interval_frames", 10)
 
-    rtde_sender = Sender(ROBOT_IP, ROBOT_PORT, config_file)
+    rtde_sender = Sender(robot_ip, robot_port, rtde_config_file)
     attempts = 0
-    max_attempts = 5
     connected = False
-    while attempts < max_attempts:
+    while attempts < max_connect_attempts:
         try:
             print("Connecting to robot...")
             rtde_sender.connect()
@@ -146,7 +155,7 @@ def run_pipeline(config_path: str | None = None):
             break
         except Exception as e:
             attempts += 1
-            print(f"Error connecting to robot (attempt {attempts}/5): {e}")
+            print(f"Error connecting to robot (attempt {attempts}/{max_connect_attempts}): {e}")
             time.sleep(1)
     if not connected:
         print("Failed to connect to robot after multiple attempts. Exiting.")
@@ -162,12 +171,19 @@ def run_pipeline(config_path: str | None = None):
           f"exit={tracker.exit_frames} frames, "
           f"distance_threshold={tracker.distance_threshold_mm:.1f} mm")
 
+    # --- Camera config ------------------------------------------------
+    cam_cfg = cfg.get("camera", {})
+    cam_width = cam_cfg.get("width", 640)
+    cam_height = cam_cfg.get("height", 480)
+    cam_fps = cam_cfg.get("fps", 30.0)
+
     # --- Unpack config -----------------------------------------------
     video_path = os.path.join(_PROJECT_ROOT, cfg["input"]["video_path"])
 
     blur_kernel = cfg["preprocess"]["blur_kernel_size"]
     thresh_val  = cfg["preprocess"]["threshold_value"]
     thresh_max  = cfg["preprocess"]["threshold_max"]
+    morph_kernel = cfg["preprocess"].get("morph_kernel_size", 7)
 
     det_cfg     = cfg["detection"]
     min_area    = det_cfg["min_contour_area"]
@@ -232,7 +248,9 @@ def run_pipeline(config_path: str | None = None):
               f"{exp_obj_w:.0f}×{exp_obj_h:.0f} mm (±{obj_tol_pct:.0f}%)")
 
     # --- Load calibration files (optional) ---------------------------
-    calib_path = os.path.join(_PROJECT_ROOT, "config", "camera_calibration.json")
+    calib_path = os.path.join(
+        _PROJECT_ROOT, calib_cfg.get("result_file", "config/camera_calibration.json")
+    )
     calib: CalibrationResult | None = None
     if calibration_exists(calib_path):
         calib = load_calibration(calib_path)
@@ -240,7 +258,10 @@ def run_pipeline(config_path: str | None = None):
     else:
         print("[pipeline] No camera calibration found - skipping undistortion.")
 
-    homog_path = os.path.join(_PROJECT_ROOT, "config", "homography.json")
+    homog_cfg = cfg.get("homography", {})
+    homog_path = os.path.join(
+        _PROJECT_ROOT, homog_cfg.get("result_file", "config/homography.json")
+    )
     homog: HomographyData | None = None
     if homography_exists(homog_path):
         homog = load_homography(homog_path)
@@ -251,7 +272,10 @@ def run_pipeline(config_path: str | None = None):
     use_belt = belt_speed > 0 and belt_delay > 0 and homog is not None
 
     # --- Open source -------------------------------------------------
-    source = FrameSource(video_path, loop=True)
+    source = FrameSource(
+        video_path, loop=True,
+        width=cam_width, height=cam_height, fps=cam_fps,
+    )
     delay  = max(1, int(1000 / source.fps))
 
     print(f"[pipeline] Opened {source}")
@@ -287,7 +311,7 @@ def run_pipeline(config_path: str | None = None):
             cropped = frame
 
         # Step 3: Preprocess → binary mask
-        mask = preprocess(cropped, blur_kernel, thresh_val, thresh_max)
+        mask = preprocess(cropped, blur_kernel, thresh_val, thresh_max, morph_kernel)
 
         # Step 4: Detect object
         result = detect_object(
@@ -316,6 +340,8 @@ def run_pipeline(config_path: str | None = None):
             result.center_y += roi_y
             result.box_points[:, 0] += roi_x
             result.box_points[:, 1] += roi_y
+            result.contour[:, :, 0] += roi_x
+            result.contour[:, :, 1] += roi_y
 
         # Step 6: Pixel → world mm
         world_coord: WorldCoordinate | None = None
@@ -367,14 +393,14 @@ def run_pipeline(config_path: str | None = None):
                     print(f"[SEND] Pose sent to robot: x={c.x_mm:.1f} mm, "
                           f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg{part_tag}")
                 elif object_present and coord is None and tracker.state == "IDLE":
-                    rtde_sender.send_pose(0.2, 1.0, 0.0, 0)  # Indicate no object
+                    rtde_sender.send_pose(*no_object_signal)  # Indicate no object
                     object_present = False
                     print(f"[SEND] No-object signal sent to robot.")
             except Exception as e:
                 print(f"[ERROR] Failed to send pose to robot: {e}")
                 connected = False
 
-        if not connected and frame_num % 10 == 0:
+        if not connected and frame_num % reconnect_interval == 0:
             try:
                 rtde_sender.connect()
                 connected = True
@@ -423,9 +449,6 @@ def run_pipeline(config_path: str | None = None):
         cv.imshow("Flying Picker - Detection", frame)
 
         if show_mask:
-
-           #resized_mask = cv.resize(mask, (640, 480))
-           #cv.imshow("Flying Picker - Mask", resized_mask)
             cv.imshow("Flying Picker - Mask", mask)
 
         # Quit on 'q'
