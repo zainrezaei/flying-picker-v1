@@ -97,7 +97,8 @@ def main():
             #print('      --world-points "0,0 400,0 400,300 0,300"')
             #sys.exit(1)
         pixel_points = np.array([[0,0],[640,0],[640,480],[0,480]], dtype=np.float32)
-        world_points = np.array([[136,933], [366,933], [366,1106], [136,1106]], dtype=np.float32)
+        world_points = np.array([[129.3,942.7], [360.1,948.9], [360.1,1119.2], [126.3,1119]], dtype=np.float32)  # mm
+
 
         
         result = calibrate_homography(pixel_points, world_points)

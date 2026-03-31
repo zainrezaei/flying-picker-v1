@@ -80,7 +80,7 @@ def calibrate_homography(
     >>> print(h.matrix)
     """
     pixel_points = np.array([[0,0],[640,0],[640,480],[0,480]], dtype=np.float32)
-    world_points = np.array([[136,933], [366,933], [366,1106], [136,1106]], dtype=np.float32)  # mm
+    world_points = np.array([[129.3,942.7], [360.1,948.9], [360.1,1119.2], [126.3,1119]], dtype=np.float32)  # mm
 
     print(f"pixel_points:\n{pixel_points}")
     print(f"world_points:\n{world_points}")

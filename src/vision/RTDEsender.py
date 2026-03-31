@@ -32,7 +32,7 @@ class Sender:
         if not self.con.send_start():
             raise RuntimeError("Failed to start RTDE communication")
         
-    def send_pose(self, x_mm, y_mm, angle_deg, valid):
+    def send_pose(self, x_mm, y_mm, angle_deg, valid, part_id):
         if self.con is None or self.inputs is None:
             raise RuntimeError("Not connected to robot")
         
@@ -40,7 +40,8 @@ class Sender:
         self.inputs.input_double_register_1 = round(y_mm/1000, 4)
         self.inputs.input_double_register_2 = math.radians(angle_deg)
         self.inputs.input_double_register_3 = float(valid)
-        
+        if part_id is not None:
+            self.inputs.input_double_register_4 = float(part_id.split("_")[1])
 
         ok = self.con.send(self.inputs)
         if not ok:

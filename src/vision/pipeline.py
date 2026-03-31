@@ -361,13 +361,13 @@ def run_pipeline(config_path: str | None = None):
             try:
                 if tracker_result.should_send and tracker_result.coord is not None:
                     c = tracker_result.coord
-                    rtde_sender.send_pose(c.x_mm, c.y_mm, c.angle_deg, 1.0)
+                    rtde_sender.send_pose(c.x_mm, c.y_mm, c.angle_deg, 1.0, result.part_id if result.part_id else "Part_0")
                     object_present = True
                     part_tag = f" part={result.part_id}" if result is not None and result.part_id else ""
                     print(f"[SEND] Pose sent to robot: x={c.x_mm:.1f} mm, "
                           f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg{part_tag}")
                 elif object_present and coord is None and tracker.state == "IDLE":
-                    rtde_sender.send_pose(0.2, 1.0, 0.0, 0)  # Indicate no object
+                    rtde_sender.send_pose(0.2, 1.0, 0.0, 0, "Part_0")  # Indicate no object
                     object_present = False
                     print(f"[SEND] No-object signal sent to robot.")
             except Exception as e:
