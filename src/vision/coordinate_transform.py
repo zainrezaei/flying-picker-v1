@@ -24,7 +24,7 @@ import numpy as np
 # ------------------------------------------------------------------ #
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_DEFAULT_HOMOGRAPHY_PATH = os.path.join(_PROJECT_ROOT, "config", "homography.json")
+_DEFAULT_HOMOGRAPHY_PATH = "/home/rasp5/flypicker2/Flying-Picker-main/flying-picker-v1/config/homography.json"
 
 
 # ------------------------------------------------------------------ #
@@ -79,8 +79,11 @@ def calibrate_homography(
     >>> h = calibrate_homography(pixel_pts, world_pts)
     >>> print(h.matrix)
     """
-    pixel_points = np.array([[0,0],[638,0],[638,474],[0,474]], dtype=np.float32)
-    world_points = np.array([[174, -972], [374, -972], [374, -1102], [174, -1102]], dtype=np.float32)  # mm
+    pixel_points = np.array([[0,0],[640,0],[640,480],[0,480]], dtype=np.float32)
+    world_points = np.array([[136,933], [366,933], [366,1106], [136,1106]], dtype=np.float32)  # mm
+
+    print(f"pixel_points:\n{pixel_points}")
+    print(f"world_points:\n{world_points}")
 
     if len(pixel_points) < 4:
         raise ValueError(f"Need at least 4 point pairs, got {len(pixel_points)}")

@@ -1,6 +1,28 @@
 import cv2
 import numpy as np
 from picamera2 import Picamera2
+from dataclasses import dataclass
+
+
+@dataclass
+class DetectionResult:
+    center_x: float
+    center_y: float
+    width: float
+    height: float
+    angle: float
+    contour: np.ndarray
+    box_points: np.ndarray
+    confidence: float = 0.0
+    part_id: str | None = None
+
+
+def score_to_confidence(best_score: float, threshold: float = 0.2) -> float:
+    if threshold <= 0:
+        conf = 1.0 / (1.0 + best_score)
+    else:
+        conf = 1.0 - (best_score / threshold)
+    return float(np.clip(conf, 0.0, 1.0))
 
 # ---------------------------
 # Load reference images (edges or binary)
@@ -36,7 +58,7 @@ picam2.start()
 while True:
     frame = picam2.capture_array()
 
-    cropped = frame[150:450, 0:640]
+    cropped = frame[70:330, 0:640]
     gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
 
     # Binary image (VERY important)
@@ -50,6 +72,24 @@ while True:
 
         # Ignore tiny noise
         if cv2.contourArea(cnt) > 500:
+            # Centroid from image moments (in cropped ROI coordinates)
+            M = cv2.moments(cnt)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+            else:
+                cx, cy = 0, 0
+
+            # Orientation from minimum-area rectangle
+            rect = cv2.minAreaRect(cnt)  # ((cx,cy), (w,h), angle)
+            (_, _), (w, h), angle = rect
+            if w < h:
+                angle = angle + 90
+
+            # Convert centroid to full-frame coordinates
+            cx_full = cx
+            cy_full = cy + 150  # ROI starts at y=150
+
             # Compare shapes
             score1 = cv2.matchShapes(contour1, cnt, 1, 0.0)
             score2 = cv2.matchShapes(contour2, cnt, 1, 0.0)
@@ -60,14 +100,50 @@ while True:
 
             best_score = min(scores)  # LOWER is better
             best_index = scores.index(best_score)
+            part_id = f"Part_{best_index + 1}" if best_score < 0.2 else None
+            confidence = score_to_confidence(best_score, threshold=0.2)
 
             print(f"Scores: {scores}")
+            print(f"Centroid (cropped): ({cx}, {cy})")
+            print(f"Centroid (full):    ({cx_full}, {cy_full})")
+            print(f"Angle: {angle:.1f} deg")
 
             if best_score < 0.2:  # tune this
                 print(f"✅ Detected Part {best_index + 1}")
 
             # Draw contour
             cv2.drawContours(cropped, [cnt], -1, (0, 255, 0), 2)
+
+            # Draw oriented bounding box and centroid
+            box = cv2.boxPoints(rect)
+            box = np.intp(box)
+
+            detection_result = DetectionResult(
+                center_x=float(cx),
+                center_y=float(cy),
+                width=float(w),
+                height=float(h),
+                angle=float(angle),
+                contour=cnt,
+                box_points=box,
+                confidence=confidence,
+                part_id=part_id,
+            )
+
+            print(f"DetectionResult: {detection_result}")
+
+            cv2.drawContours(cropped, [box], 0, (255, 0, 0), 2)
+            cv2.circle(cropped, (cx, cy), 5, (0, 0, 255), -1)
+            cv2.putText(
+                cropped,
+                f"{part_id or 'Unknown'} C=({cx_full},{cy_full}) A={angle:.1f}",
+                (cx + 10, cy - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
 
     cv2.imshow("Threshold", thresh)
     cv2.imshow("Frame", frame)

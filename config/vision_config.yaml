@@ -9,16 +9,16 @@ input:
 # --- Preprocessing ---
 preprocess:
   blur_kernel_size: 5        # Gaussian blur kernel (must be odd)
-  threshold_value: 100       # Binary threshold (0-255); light object on dark bg
-  threshold_max: 255         # Max value for binary threshold
+  threshold_value: 150       # Binary threshold (0-255); light object on dark bg
+  threshold_max: 250         # Max value for binary threshold
 
 # --- Detection ---
 detection:
-  min_contour_area: 5000     # Ignore contours smaller than this (pixels²)
+  min_contour_area: 500     # Ignore contours smaller than this (pixels²)
   max_contour_area: 200000   # Ignore contours larger than this (pixels²); 0 = no limit
-  min_solidity: 0.80         # Min contour-area / convex-hull-area ratio (0–1); 0 = disabled
+  min_solidity: 0.60         # Min contour-area / convex-hull-area ratio (0–1); 0 = disabled
   min_aspect_ratio: 0.3      # Min width/height of rotated bbox; 0 = disabled
-  max_aspect_ratio: 3.0      # Max width/height of rotated bbox; 0 = disabled
+  max_aspect_ratio: 10.0      # Max width/height of rotated bbox; 0 = disabled
   min_confidence: 0.50       # Reject detections below this confidence (0–1)
   edge_margin: 10            # Reject objects within this many px of frame edge (partial entry)
 
@@ -26,9 +26,9 @@ detection:
 roi:
   enabled: true
   x_start: 0.0            # Left edge crop (0.0 = no crop, 0.1 = crop 10%)
-  y_start: 0.0          # Top edge crop
+  y_start: 0.08         # Top edge crop
   x_end: 1.0             # Right edge (1.0 = full width)
-  y_end: 0.99              # Bottom edge (< 1.0 crops bottom noise)
+  y_end: 0.70              # Bottom edge (< 1.0 crops bottom noise)
 
 # --- Shape Classification (Hu Moment matching) ---
 classification:
@@ -73,7 +73,7 @@ belt:
 tracking:
   confirm_frames: 3          # Consecutive detections before sending (filters jitter)
   exit_frames: 5             # Consecutive no-detections before resetting (absorbs dropouts)
-  distance_threshold_mm: 20  # Distance jump (mm) to consider a "new part"
+  distance_threshold_mm: 10  # Distance jump (mm) to consider a "new part"
 
 # --- Display ---
 display:
@@ -81,7 +81,7 @@ display:
   show_mask: true           # Show the binary mask window (useful for debugging/tuning)
   overlay_color: [0, 255, 0] # Bounding box color (BGR — green)
   centroid_color: [0, 0, 255] # Centroid dot color (BGR — red)
-  text_color: [255, 255, 255] # Text color (BGR — white)
+  text_color: [0, 255, 0] # Text color (BGR — white)
   centroid_radius: 6
   box_thickness: 2
   font_scale: 0.6

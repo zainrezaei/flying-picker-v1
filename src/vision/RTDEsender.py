@@ -40,6 +40,7 @@ class Sender:
         self.inputs.input_double_register_1 = round(y_mm/1000, 4)
         self.inputs.input_double_register_2 = math.radians(angle_deg)
         self.inputs.input_double_register_3 = float(valid)
+        
 
         ok = self.con.send(self.inputs)
         if not ok:

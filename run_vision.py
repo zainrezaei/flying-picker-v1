@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3q
 """
 run_vision.py — Entry point for the Flying Picker vision pipeline.
 

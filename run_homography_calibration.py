@@ -89,17 +89,18 @@ def main():
 
     else:
         # --- Direct mode ---
-        if not args.pixel_points or not args.world_points:
-            print("ERROR: Non-interactive mode requires both --pixel-points and --world-points.")
-            print('Example:')
-            print('  python run_homography_calibration.py \\')
-            print('      --pixel-points "100,50 500,50 500,400 100,400" \\')
-            print('      --world-points "0,0 400,0 400,300 0,300"')
-            sys.exit(1)
+        #if not args.pixel_points or not args.world_points:
+            #print("ERROR: Non-interactive mode requires both --pixel-points and --world-points.")
+            #print('Example:')
+            #print('  python run_homography_calibration.py \\')
+            #print('      --pixel-points "100,50 500,50 500,400 100,400" \\')
+            #print('      --world-points "0,0 400,0 400,300 0,300"')
+            #sys.exit(1)
+        pixel_points = np.array([[0,0],[640,0],[640,480],[0,480]], dtype=np.float32)
+        world_points = np.array([[136,933], [366,933], [366,1106], [136,1106]], dtype=np.float32)
 
-        pixel_pts = _parse_points(args.pixel_points)
-        world_pts = _parse_points(args.world_points)
-        result = calibrate_homography(pixel_pts, world_pts)
+        
+        result = calibrate_homography(pixel_points, world_points)
 
     # Save
     save_homography(result, args.output)
