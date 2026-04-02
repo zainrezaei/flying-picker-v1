@@ -8,27 +8,27 @@ input:
   #video_path: "1"
 # --- Preprocessing ---
 preprocess:
-  blur_kernel_size: 5        # Gaussian blur kernel (must be odd)
-  threshold_value: 150       # Binary threshold (0-255); light object on dark bg
+  blur_kernel_size: 3        # Gaussian blur kernel (must be odd)
+  threshold_value: 140       # Binary threshold (0-255); light object on dark bg
   threshold_max: 250         # Max value for binary threshold
 
 # --- Detection ---
 detection:
-  min_contour_area: 500     # Ignore contours smaller than this (pixels²)
+  min_contour_area: 1500     # Ignore contours smaller than this (pixels²)
   max_contour_area: 200000   # Ignore contours larger than this (pixels²); 0 = no limit
   min_solidity: 0.60         # Min contour-area / convex-hull-area ratio (0–1); 0 = disabled
   min_aspect_ratio: 0.3      # Min width/height of rotated bbox; 0 = disabled
   max_aspect_ratio: 10.0      # Max width/height of rotated bbox; 0 = disabled
-  min_confidence: 0.50       # Reject detections below this confidence (0–1)
+  min_confidence: 0.60       # Reject detections below this confidence (0–1)
   edge_margin: 10            # Reject objects within this many px of frame edge (partial entry)
 
 # --- Region of Interest (crop frame edges to remove noise) ---
 roi:
   enabled: true
   x_start: 0.0            # Left edge crop (0.0 = no crop, 0.1 = crop 10%)
-  y_start: 0.21         # Top edge crop
+  y_start: 0.26         # Top edge crop
   x_end: 1.0             # Right edge (1.0 = full width)
-  y_end: 0.8              # Bottom edge (< 1.0 crops bottom noise)
+  y_end: 0.85              # Bottom edge (< 1.0 crops bottom noise)
 
 # --- Shape Classification (Hu Moment matching) ---
 classification:
@@ -49,7 +49,7 @@ calibration:
   # --- Physical measurements (fill in once measured on-site) ---
   belt_width_mm: 0.0                 # (#1) Conveyor belt width in mm
   camera_height_mm: 0.0              # (#3) Camera lens height above belt surface in mm
-  camera_offset_x_mm: -17            # (#4) Camera X offset from robot origin in mm
+  camera_offset_x_mm: 0            # (#4) Camera X offset from robot origin in mm
   camera_offset_y_mm: 10            # (#4) Camera Y offset from robot origin in mm
   expected_object_width_mm: 0.0       # (#5) Expected object width for sanity check (mm)
   expected_object_height_mm: 0.0      # (#5) Expected object height for sanity check (mm)
@@ -71,7 +71,7 @@ belt:
 # --- Detection Tracking (single-send with debounce) ---
 # Prevents duplicate coordinate sends for the same part.
 tracking:
-  confirm_frames: 3          # Consecutive detections before sending (filters jitter)
+  confirm_frames: 5          # Consecutive detections before sending (filters jitter)
   exit_frames: 5             # Consecutive no-detections before resetting (absorbs dropouts)
   distance_threshold_mm: 10  # Distance jump (mm) to consider a "new part"
 
