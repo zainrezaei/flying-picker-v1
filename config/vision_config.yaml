@@ -15,7 +15,7 @@ robot:
 camera:
   width: 640                        # Capture resolution width (pixels)
   height: 480                       # Capture resolution height (pixels)
-  fps: 30.0                         # Expected framerate (used for display delay)
+  fps: 60.0                         # Expected framerate (used for display delay)
 
 # --- Input source ---
 input:
@@ -29,7 +29,7 @@ preprocess:
 
 # --- Detection ---
 detection:
-  min_contour_area: 1500     # Ignore contours smaller than this (pixels²)
+  min_contour_area: 10000     # Ignore contours smaller than this (pixels²)
   max_contour_area: 200000   # Ignore contours larger than this (pixels²); 0 = no limit
   min_solidity: 0.60         # Min contour-area / convex-hull-area ratio (0–1); 0 = disabled
   min_aspect_ratio: 0.3      # Min width/height of rotated bbox; 0 = disabled
@@ -86,8 +86,8 @@ belt:
 # --- Detection Tracking (single-send with debounce) ---
 # Prevents duplicate coordinate sends for the same part.
 tracking:
-  confirm_frames: 5          # Consecutive detections before sending (filters jitter)
-  exit_frames: 5             # Consecutive no-detections before resetting (absorbs dropouts)
+  confirm_frames: 10          # Consecutive detections before sending (filters jitter)
+  exit_frames: 10             # Consecutive no-detections before resetting (absorbs dropouts)
   distance_threshold_mm: 10  # Distance jump (mm) to consider a "new part"
 
 # --- Display ---

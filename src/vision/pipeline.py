@@ -175,7 +175,7 @@ def run_pipeline(config_path: str | None = None):
     cam_cfg = cfg.get("camera", {})
     cam_width = cam_cfg.get("width", 640)
     cam_height = cam_cfg.get("height", 480)
-    cam_fps = cam_cfg.get("fps", 30.0)
+    cam_fps = cam_cfg.get("fps", 60.0)
 
     # --- Unpack config -----------------------------------------------
     video_path = os.path.join(_PROJECT_ROOT, cfg["input"]["video_path"])
