@@ -57,18 +57,6 @@ def calibrate_from_images(
     square_size_mm: float = 25.0,
     show_corners: bool = True,
 ) -> CalibrationResult:
-    if image_paths is None:
-        # Scan directory at runtime
-        image_paths = (
-            glob.glob(os.path.join(IMAGE_DIR, "*")) +
-            glob.glob(os.path.join(IMAGE_DIR, "*.jpeg")) +
-            glob.glob(os.path.join(IMAGE_DIR, "*.JPG")) +
-            glob.glob(os.path.join(IMAGE_DIR, "*.JPEG"))
-        )
-
-    print(f"[calibration] Processing {len(image_paths)} images from {IMAGE_DIR} "
-          f"(board {board_size[0]}×{board_size[1]}, square {square_size_mm} mm)...")
-    
     """Run camera calibration from a set of checkerboard images.
 
     Parameters
@@ -86,6 +74,18 @@ def calibrate_from_images(
     -------
     CalibrationResult
     """
+    if image_paths is None:
+        # Scan directory at runtime
+        image_paths = (
+            glob.glob(os.path.join(IMAGE_DIR, "*")) +
+            glob.glob(os.path.join(IMAGE_DIR, "*.jpeg")) +
+            glob.glob(os.path.join(IMAGE_DIR, "*.JPG")) +
+            glob.glob(os.path.join(IMAGE_DIR, "*.JPEG"))
+        )
+
+    print(f"[calibration] Processing {len(image_paths)} images from {IMAGE_DIR} "
+          f"(board {board_size[0]}×{board_size[1]}, square {square_size_mm} mm)...")
+
     # Prepare object points (0,0,0), (1,0,0), ... scaled by square size
     objp = np.zeros((board_size[0] * board_size[1], 3), np.float32)
     objp[:, :2] = np.mgrid[0:board_size[0], 0:board_size[1]].T.reshape(-1, 2)
@@ -96,10 +96,6 @@ def calibrate_from_images(
     image_size = None
 
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
-    print(f"[calibration] Processing {len(image_paths)} images "
-          f"from {IMAGE_DIR}"
-          f"(board {board_size[0]}×{board_size[1]}, square {square_size_mm} mm)...")
 
     for i, path in enumerate(image_paths):
         img = cv.imread(path)
@@ -173,7 +169,7 @@ def calibrate_live(
     board_size: tuple[int, int] = (9, 6),
     square_size_mm: float = 25.0,
     num_captures: int = 20,
-    save_images_dir: str = "/home/rasp5/flypicker2/Flying-Picker/calib_images",
+    save_images_dir: str = IMAGE_DIR,
 ) -> CalibrationResult:
     """Interactive calibration — capture checkerboard images from a live source.
 
@@ -353,8 +349,3 @@ def undistort_frame(frame: np.ndarray, calib: CalibrationResult) -> np.ndarray:
     if calib.map1 is None or calib.map2 is None:
         _compute_maps(calib)
     return cv.remap(frame, calib.map1, calib.map2, cv.INTER_LINEAR)
-
-#f __name__ == "__main__":
-    # calibrate from saved images
-#   calib_result = calibrate_from_images(show_corners=True)
-#   save_calibration(calib_result)

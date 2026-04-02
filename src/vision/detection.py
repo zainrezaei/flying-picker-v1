@@ -122,9 +122,14 @@ def detect_object(
         if solidity < min_solidity:
             return None
 
-    # Minimum-area rotated rectangle
-    rect = cv.minAreaRect(largest)      # ((cx, cy), (w, h), angle)
-    (cx, cy), (w, h), angle = rect
+    # True centroid via image moments (correct for asymmetric shapes)
+    M = cv.moments(largest)
+    cx = M["m10"] / M["m00"]
+    cy = M["m01"] / M["m00"]
+
+    # Minimum-area rotated rectangle (for bounding box dimensions & angle)
+    rect = cv.minAreaRect(largest)      # ((cx_rect, cy_rect), (w, h), angle)
+    _, (w, h), angle = rect
 
     # --- Gate 3: aspect ratio ---
     if w > 0 and h > 0:

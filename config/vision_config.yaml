@@ -2,6 +2,21 @@
 # Flying Picker — Vision System Configuration
 # ============================================================
 
+# --- Robot / RTDE connection ---
+robot:
+  ip: "192.168.10.2"               # Robot IP address
+  port: 30004                       # RTDE port
+  rtde_config_file: "rtde_config.xml"   # RTDE recipe XML (relative to project root)
+  max_connect_attempts: 5           # Number of connection retries before giving up
+  reconnect_interval_frames: 10     # Try to reconnect every N frames when disconnected
+  no_object_signal: [0.2, 1.0, 0.0, 0.0, "Part_0"]  # (x, y, angle, valid) sent when no object
+
+# --- Camera ---
+camera:
+  width: 640                        # Capture resolution width (pixels)
+  height: 480                       # Capture resolution height (pixels)
+  fps: 30.0                         # Expected framerate (used for display delay)
+
 # --- Input source ---
 input:
   video_path: "public/IMG_6256.MOV"   # path relative to project root
@@ -80,6 +95,7 @@ display:
   show_windows: true         # Show live OpenCV windows
   show_mask: true           # Show the binary mask window (useful for debugging/tuning)
   overlay_color: [0, 255, 0] # Bounding box color (BGR — green)
+  contour_color: [255, 255, 0] # Contour outline color (BGR — cyan)
   centroid_color: [0, 0, 255] # Centroid dot color (BGR — red)
   text_color: [0, 255, 0] # Text color (BGR — white)
   centroid_radius: 6
