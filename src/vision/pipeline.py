@@ -137,7 +137,7 @@ def run_pipeline(config_path: str | None = None):
     robot_ip = robot_cfg.get("ip", "192.168.10.2")
     robot_port = robot_cfg.get("port", 30004)
     rtde_config_file = os.path.join(
-        _PROJECT_ROOT, robot_cfg.get("rtde_config_file", "rtde_config.xml")
+        _PROJECT_ROOT, "config", robot_cfg.get("rtde_config_file", "rtde_config.xml")
     )
     max_connect_attempts = robot_cfg.get("max_connect_attempts", 5)
     no_object_signal = robot_cfg.get("no_object_signal", [0.2, 1.0, 0.0, 0.0])
