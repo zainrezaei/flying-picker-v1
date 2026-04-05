@@ -127,9 +127,20 @@ def detect_object(
     cx = M["m10"] / M["m00"]
     cy = M["m01"] / M["m00"]
 
-    # Minimum-area rotated rectangle (for bounding box dimensions & angle)
-    rect = cv.minAreaRect(largest)      # ((cx_rect, cy_rect), (w, h), angle)
-    _, (w, h), angle = rect
+    # Principal Axis of Inertia for robust rotation angle (superior for arbitrary shapes)
+    mu20 = M["mu20"]
+    mu02 = M["mu02"]
+    mu11 = M["mu11"]
+    
+    if (mu20 - mu02) == 0 and mu11 == 0:
+        angle = 0.0  # Perfectly symmetrical object (e.g., circle/square)
+    else:
+        angle_rad = 0.5 * np.arctan2(2 * mu11, mu20 - mu02)
+        angle = np.degrees(angle_rad)
+
+    # Minimum-area rotated rectangle (still needed for w, h and drawing bounding box)
+    rect = cv.minAreaRect(largest)
+    _, (w, h), _ = rect
 
     # --- Gate 3: aspect ratio ---
     if w > 0 and h > 0:
@@ -141,12 +152,6 @@ def detect_object(
         return None
     if max_aspect_ratio > 0 and aspect > max_aspect_ratio:
         return None
-
-    # Normalise angle so it's easier to interpret:
-    # OpenCV's minAreaRect returns angle in [-90, 0).
-    # We convert so that 0° = aligned with x-axis, positive = CCW.
-    if w < h:
-        angle = angle + 90              # swap so width > height convention
 
     box = cv.boxPoints(rect)            # 4 corner points
     box = np.intp(box)                  # convert to integer

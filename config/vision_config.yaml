@@ -6,7 +6,7 @@
 robot:
   ip: "192.168.10.2"               # Robot IP address
   port: 30004                       # RTDE port
-  rtde_config_file: "rtde_config.xml"   # RTDE recipe XML (relative to project root)
+  rtde_config_file: "config/rtde_config.xml"   # RTDE recipe XML (relative to project root)
   max_connect_attempts: 5           # Number of connection retries before giving up
   reconnect_interval_frames: 10     # Try to reconnect every N frames when disconnected
   no_object_signal: [0.2, 1.0, 0.0, 0.0, "Part_0"]  # (x, y, angle, valid) sent when no object
@@ -48,7 +48,7 @@ roi:
 # --- Shape Classification (Hu Moment matching) ---
 classification:
   enabled: true
-  reference_dir: "."              # directory containing Part_*.jpg / Part_*.png
+  reference_dir: "data/reference_images"              # directory containing Part_*.jpg / Part_*.png
   match_threshold: 0.20           # max matchShapes score to accept (lower = stricter)
   method: 1                       # cv2.matchShapes method (1 = CONTOURS_MATCH_I2)
   ref_thresh_value: 160           # binary threshold for reference images
@@ -101,3 +101,11 @@ display:
   centroid_radius: 6
   box_thickness: 2
   font_scale: 0.6
+
+# --- Terminal Dashboard (Rich) ---
+# Replaces print() output with a live multi-panel terminal UI.
+dashboard:
+  enabled: true              # Enable Rich terminal dashboard
+  refresh_rate: 15           # Dashboard refresh rate (Hz); 10–30 is smooth
+  show_sparkline: true       # Show latency sparkline in performance panel
+  sparkline_length: 50       # Number of frames in the sparkline history

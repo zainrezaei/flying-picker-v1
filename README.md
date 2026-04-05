@@ -288,7 +288,7 @@ All tunable parameters are in `config/vision_config.yaml`:
 robot:
   ip: "192.168.10.2"        # UR robot IP
   port: 30004               # RTDE port
-  rtde_config_file: "rtde_config.xml"
+  rtde_config_file: "config/rtde_config.xml"
   max_connect_attempts: 5
   reconnect_interval_frames: 10
   no_object_signal: [0.2, 1.0, 0.0, 0.0]

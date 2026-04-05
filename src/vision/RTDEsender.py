@@ -1,7 +1,13 @@
 import math
 import time
-import rtde.rtde as rtde
-import rtde.rtde_config as rtde_config
+
+try:
+    import rtde.rtde as rtde
+    import rtde.rtde_config as rtde_config
+    _HAS_RTDE = True
+except ImportError:
+    _HAS_RTDE = False
+
 
 class Sender:
     def __init__(self, robot_ip, robot_port, config_file):
@@ -12,6 +18,11 @@ class Sender:
         self.inputs = None
 
     def connect(self):
+        if not _HAS_RTDE:
+            raise ImportError(
+                "rtde library is not installed. Cannot connect to robot. "
+                "Install it on the target system or run in offline mode."
+            )
         conf = rtde_config.ConfigFile(self.config_file)
 
         output_names, output_types = conf.get_recipe("outputs")
