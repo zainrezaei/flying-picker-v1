@@ -204,31 +204,29 @@ class Dashboard:
         robot_panel = self._build_robot_panel(d)
 
         # ============================================================
-        # 2. System Status + Config (side by side)
+        # 2. System Status + Performance (side by side)
         # ============================================================
         status_table = self._build_status_table(d)
-        config_table = self._build_config_table(d)
+        perf_panel = self._build_performance_panel(d)
         top_row = Columns(
             [
-                Panel(status_table, title="[bold cyan]System Status", border_style="cyan", expand=True),
-                Panel(config_table, title="[bold cyan]Pipeline Config", border_style="cyan", expand=True),
+                Panel(status_table, title="[bold cyan]System Status[/]", border_style="cyan", expand=True),
+                Panel(perf_panel, title="[bold blue]Performance[/]", border_style="blue", expand=True),
             ],
             equal=True,
             expand=True,
         )
 
         # ============================================================
-        # 3. Live Detection
+        # 3. Live Detection (full width for maximum visibility)
         # ============================================================
         detection_panel = self._build_detection_panel(d)
+        detection_container = Panel(
+            detection_panel, title="[bold magenta]Live Detection[/]", border_style="magenta", expand=True
+        )
 
         # ============================================================
-        # 4. Performance
-        # ============================================================
-        perf_panel = self._build_performance_panel(d)
-
-        # ============================================================
-        # 5. Log
+        # 4. Log
         # ============================================================
         log_panel = self._build_log_panel()
 
@@ -239,16 +237,9 @@ class Dashboard:
             Text(""),
             top_row,
             Text(""),
-            Columns(
-                [
-                    Panel(detection_panel, title="[bold magenta]Live Detection", border_style="magenta", expand=True),
-                    Panel(perf_panel, title="[bold blue]Performance", border_style="blue", expand=True),
-                ],
-                equal=True,
-                expand=True,
-            ),
+            detection_container,
             Text(""),
-            Panel(log_panel, title="[bold dim]Log", border_style="dim", expand=True),
+            Panel(log_panel, title="[bold dim]Log[/]", border_style="dim", expand=True),
             Text(""),
             Text.from_markup("  Press [bold cyan]'q'[/] in OpenCV window to quit.", style="dim"),
         )
@@ -335,8 +326,8 @@ class Dashboard:
     def _build_status_table(self, d: DashboardData) -> Table:
         """System status indicators."""
         t = Table(show_header=False, show_edge=False, show_lines=False, expand=True, padding=(0, 1))
-        t.add_column("item", style="white", ratio=2)
-        t.add_column("status", ratio=3)
+        t.add_column("item", style="white", width=16)
+        t.add_column("status", justify="left")
 
         def _dot(ok: bool, yes: str = "Connected", no: str = "Disconnected") -> Text:
             if ok:
@@ -360,25 +351,11 @@ class Dashboard:
 
         return t
 
-    def _build_config_table(self, d: DashboardData) -> Table:
-        """Pipeline configuration summary."""
-        t = Table(show_header=False, show_edge=False, show_lines=False, expand=True, padding=(0, 1))
-        t.add_column("param", style="dim white", ratio=2)
-        t.add_column("value", style="white", ratio=3)
-
-        t.add_row("Source", Text(d.source_path or "—", style="cyan"))
-        t.add_row("Resolution", Text(d.resolution or "—"))
-        t.add_row("Threshold", Text(d.threshold or "—"))
-        t.add_row("Min Area", Text(f"{d.min_area:,} px²" if d.min_area else "—"))
-        t.add_row("ROI", Text(d.roi_info or "—"))
-
-        return t
-
     def _build_detection_panel(self, d: DashboardData) -> Table:
         """Current frame detection data."""
         t = Table(show_header=False, show_edge=False, show_lines=False, expand=True, padding=(0, 1))
-        t.add_column("param", style="dim white", ratio=2)
-        t.add_column("value", ratio=3)
+        t.add_column("param", style="dim white", width=16)
+        t.add_column("value", justify="left")
 
         t.add_row("Frame", Text(f"{d.frame_num:,}", style="bold white"))
 
@@ -425,8 +402,8 @@ class Dashboard:
     def _build_performance_panel(self, d: DashboardData) -> Table:
         """Performance metrics."""
         t = Table(show_header=False, show_edge=False, show_lines=False, expand=True, padding=(0, 1))
-        t.add_column("metric", style="dim white", ratio=2)
-        t.add_column("value", ratio=3)
+        t.add_column("metric", style="dim white", width=16)
+        t.add_column("value", justify="left")
 
         # FPS
         fps_color = "green" if d.actual_fps >= 25 else "yellow" if d.actual_fps >= 15 else "red"
