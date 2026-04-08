@@ -127,16 +127,16 @@ def detect_object(
     cx = M["m10"] / M["m00"]
     cy = M["m01"] / M["m00"]
 
-    # Principal Axis of Inertia for robust rotation angle (superior for arbitrary shapes)
-    mu20 = M["mu20"]
-    mu02 = M["mu02"]
-    mu11 = M["mu11"]
-    
-    if (mu20 - mu02) == 0 and mu11 == 0:
-        angle = 0.0  # Perfectly symmetrical object (e.g., circle/square)
-    else:
-        angle_rad = 0.5 * np.arctan2(2 * mu11, mu20 - mu02)
-        angle = np.degrees(angle_rad)
+    # Principal Axis via PCA on contour points — robust for ALL shapes.
+    # PCA finds the direction of maximum geometric spread across the
+    # actual boundary points, which is more stable than moments for
+    # irregular (non-rectangular) shapes.
+    pts = largest.reshape(-1, 2).astype(np.float64)
+    mean, eigenvectors = cv.PCACompute(pts, mean=None)
+
+    # The first eigenvector points along the longest axis of the contour
+    angle_rad = np.arctan2(eigenvectors[0, 1], eigenvectors[0, 0])
+    angle = np.degrees(angle_rad)
 
     # Minimum-area rotated rectangle (still needed for w, h and drawing bounding box)
     rect = cv.minAreaRect(largest)
