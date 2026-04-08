@@ -16,7 +16,7 @@ class FrameSource:
 
     def __init__(
         self,
-        path: str = None,
+        path=None,
         loop: bool = True,
         width: int = 640,
         height: int = 480,
@@ -28,9 +28,17 @@ class FrameSource:
         self._height = height
         self._use_camera = False
 
-        # Decide backend: file path → OpenCV, otherwise → Picamera2
-        if path is not None and path != "":
-            self._cap = cv.VideoCapture(path)
+        # Decide backend: OpenCV source (camera index or file path) or Picamera2.
+        source = None
+        if isinstance(path, int):
+            source = path
+        elif isinstance(path, str):
+            value = path.strip()
+            if value != "":
+                source = int(value) if value.isdigit() else value
+
+        if source is not None:
+            self._cap = cv.VideoCapture(source)
             if not self._cap.isOpened():
                 raise FileNotFoundError(
                     f"Cannot open video source: {path}"
@@ -39,7 +47,7 @@ class FrameSource:
             self._width = int(self._cap.get(cv.CAP_PROP_FRAME_WIDTH))
             self._height = int(self._cap.get(cv.CAP_PROP_FRAME_HEIGHT))
             self._frame_count = int(self._cap.get(cv.CAP_PROP_FRAME_COUNT))
-            self._source_label = path
+            self._source_label = str(path)
         else:
             # Live camera
             if not _HAS_PICAMERA2:

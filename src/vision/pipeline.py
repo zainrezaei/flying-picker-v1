@@ -15,6 +15,7 @@ Full processing chain:
 import os
 import sys
 import time
+from typing import Any
 
 import cv2 as cv
 import numpy as np
@@ -57,6 +58,35 @@ def _load_config(config_path: str | None = None) -> dict:
         config_path = os.path.join(_PROJECT_ROOT, "config", "vision_config.yaml")
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
+
+
+def _resolve_input_source(raw_source: Any):
+    """Resolve configured input source into a camera index or absolute path.
+
+    Accepts:
+      - int camera index (e.g. 0, 1)
+      - numeric string camera index (e.g. "0", "1")
+      - file path string (absolute or project-relative)
+      - None/empty string for live Pi camera fallback
+    """
+    if raw_source is None:
+        return None
+
+    if isinstance(raw_source, int):
+        return raw_source
+
+    if isinstance(raw_source, str):
+        value = raw_source.strip()
+        if value == "":
+            return None
+        if value.isdigit():
+            return int(value)
+        if os.path.isabs(value):
+            return value
+        return os.path.join(_PROJECT_ROOT, value)
+
+    # Fallback for unusual but serializable config values.
+    return str(raw_source)
 
 
 def _draw_overlay(
@@ -194,15 +224,11 @@ def run_pipeline(config_path: str | None = None):
     cam_fps = cam_cfg.get("fps", 60.0)
 
     # --- Unpack config -----------------------------------------------
-    _raw_video = cfg["input"].get("video_path", "")
-    if _raw_video:
-        video_path = os.path.join(_PROJECT_ROOT, _raw_video)
-        if not os.path.isfile(video_path):
-            _log(f"[pipeline] Video file not found: {video_path}")
-            _log("[pipeline] Falling back to live camera (Picamera2).")
-            video_path = ""
-    else:
-        video_path = ""
+    video_path = _resolve_input_source(cfg.get("input", {}).get("video_path"))
+    if isinstance(video_path, str) and not os.path.isfile(video_path):
+        _log(f"[pipeline] Video file not found: {video_path}")
+        _log("[pipeline] Falling back to live camera (Picamera2).")
+        video_path = None
 
     blur_kernel = cfg["preprocess"]["blur_kernel_size"]
     thresh_val  = cfg["preprocess"]["threshold_value"]
@@ -319,7 +345,7 @@ def run_pipeline(config_path: str | None = None):
     robot_total_sends: int = 0
 
     # Config summary strings for dashboard
-    _source_path = video_path if video_path else "picamera2 (live)"
+    _source_path = "picamera2 (live)" if video_path is None else str(video_path)
     _resolution_str = f"{cam_width}×{cam_height} @ {cam_fps:.0f} fps"
     _threshold_str = f"{thresh_val} / {thresh_max}"
     _roi_str = "disabled"
