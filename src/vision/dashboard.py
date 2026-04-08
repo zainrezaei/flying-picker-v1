@@ -335,9 +335,7 @@ class Dashboard:
             return Text(f"○ {no}", style="dim red")
 
         t.add_row("Robot", _dot(d.robot_connected))
-        t.add_row("Camera Cal.", _dot(d.calib_loaded, "Loaded", "Not calibrated"))
         t.add_row("Homography", _dot(d.homog_loaded, "Loaded", "Not calibrated"))
-        t.add_row("Belt Comp.", _dot(d.belt_enabled, "Enabled", "Disabled"))
         t.add_row("Classifier", _dot(d.classifier_enabled, "Enabled", "Disabled"))
 
         # Tracker state with color
