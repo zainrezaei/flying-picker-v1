@@ -228,11 +228,12 @@ Console output each frame:
 ### Prerequisites
 
 - Python 3.10+
-- macOS / Linux / Windows
+- macOS / Linux / Windows / Raspberry Pi OS
 
-### Install
+### Install (Desktop / Laptop)
 
 ```bash
+git clone https://github.com/zainrezaei/flying-picker-v1.git
 cd flying-picker-v1
 
 # Create virtual environment (if not already done)
@@ -243,6 +244,42 @@ source .venv/bin/activate        # macOS/Linux
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+### Fresh Install on Target Hardware (Raspberry Pi 5)
+
+If you are setting up the vision system on the Pi from absolute scratch, follow these exact steps to ensure the hardware drivers (like `picamera2`) are loaded correctly.
+
+1. **Delete the old project** (if reinstalling):
+   ```bash
+   cd ~
+   rm -rf flying-picker-v1
+   ```
+
+2. **Install system-level libraries** (including camera triggers + OpenCV graphic dependencies):
+   ```bash
+   sudo apt update
+   sudo apt upgrade -y
+   sudo apt install -y git python3-pip python3-venv libgl1-mesa-glx libglib2.0-0 python3-picamera2
+   ```
+
+3. **Clone the repository:**
+   ```bash
+   git clone https://github.com/zainrezaei/flying-picker-v1.git
+   cd flying-picker-v1
+   ```
+
+4. **Create a Python Virtual Environment**:
+   *Note*: The `--system-site-packages` flag is mandatory here for the Pi so Python can see the camera driver installed via `apt` above!
+   ```bash
+   python3 -m venv --system-site-packages .venv
+   source .venv/bin/activate
+   ```
+
+5. **Install Python Libraries**:
+   This installs the standard requirements + queries GitHub automatically to fetch the official Universal Robots RTDE module.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ### Run
 
