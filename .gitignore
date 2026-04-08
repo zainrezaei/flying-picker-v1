@@ -12,3 +12,6 @@ venv/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# User specific docs
+docs/Gala_Mechatronic_Circus_Guide.md

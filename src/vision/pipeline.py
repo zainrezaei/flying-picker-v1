@@ -42,6 +42,7 @@ from .coordinate_transform import (
 from .RTDEsender import Sender
 from .detection_tracker import DetectionTracker
 from .shape_classifier import ShapeClassifier
+from .dashboard import Dashboard, DashboardData
 
 # ------------------------------------------------------------------ #
 # Helpers                                                              #
@@ -76,9 +77,6 @@ def _draw_overlay(
 
     # Actual contour outline (real shape)
     cv.drawContours(frame, [result.contour], 0, contour_color, thickness)
-
-    # Rotated bounding box
-    cv.drawContours(frame, [result.box_points], 0, overlay_color, thickness)
 
     # Centroid (true center of mass)
     cx, cy = int(result.center_x), int(result.center_y)
@@ -132,6 +130,24 @@ def run_pipeline(config_path: str | None = None):
     """
     cfg = _load_config(config_path)
 
+    # --- Dashboard (Rich terminal UI) --------------------------------
+    dash_cfg = cfg.get("dashboard", {})
+    use_dashboard = dash_cfg.get("enabled", False)
+    dashboard: Dashboard | None = None
+    if use_dashboard:
+        dashboard = Dashboard(
+            refresh_rate=dash_cfg.get("refresh_rate", 15),
+            sparkline_length=dash_cfg.get("sparkline_length", 50),
+            show_sparkline=dash_cfg.get("show_sparkline", True),
+        )
+
+    def _log(msg: str):
+        """Print or log to dashboard."""
+        if dashboard is not None:
+            dashboard.log(msg)
+        else:
+            print(msg)
+
     # --- Robot / RTDE connection (from config) -----------------------
     robot_cfg = cfg.get("robot", {})
     robot_ip = robot_cfg.get("ip", "192.168.10.2")
@@ -148,17 +164,17 @@ def run_pipeline(config_path: str | None = None):
     connected = False
     while attempts < max_connect_attempts:
         try:
-            print("Connecting to robot...")
+            _log("Connecting to robot...")
             rtde_sender.connect()
-            print("Connected to robot!")
+            _log("Connected to robot!")
             connected = True
             break
         except Exception as e:
             attempts += 1
-            print(f"Error connecting to robot (attempt {attempts}/{max_connect_attempts}): {e}")
+            _log(f"Error connecting to robot (attempt {attempts}/{max_connect_attempts}): {e}")
             time.sleep(1)
     if not connected:
-        print("Failed to connect to robot after multiple attempts. Exiting.")
+        _log("Failed to connect to robot after multiple attempts.")
 
     # --- Detection tracker (single-send with debounce) ---------------
     track_cfg = cfg.get("tracking", {})
@@ -167,9 +183,9 @@ def run_pipeline(config_path: str | None = None):
         exit_frames=track_cfg.get("exit_frames", 5),
         distance_threshold_mm=track_cfg.get("distance_threshold_mm", 20.0),
     )
-    print(f"[pipeline] Detection tracker: confirm={tracker.confirm_frames} frames, "
-          f"exit={tracker.exit_frames} frames, "
-          f"distance_threshold={tracker.distance_threshold_mm:.1f} mm")
+    _log(f"[pipeline] Detection tracker: confirm={tracker.confirm_frames} frames, "
+         f"exit={tracker.exit_frames} frames, "
+         f"distance_threshold={tracker.distance_threshold_mm:.1f} mm")
 
     # --- Camera config ------------------------------------------------
     cam_cfg = cfg.get("camera", {})
@@ -237,15 +253,15 @@ def run_pipeline(config_path: str | None = None):
     use_size_check   = exp_obj_w > 0.0 and exp_obj_h > 0.0
 
     if belt_width_mm > 0:
-        print(f"[pipeline] Belt width: {belt_width_mm:.0f} mm")
+        _log(f"[pipeline] Belt width: {belt_width_mm:.0f} mm")
     if camera_height_mm > 0:
-        print(f"[pipeline] Camera height above belt: {camera_height_mm:.0f} mm")
+        _log(f"[pipeline] Camera height above belt: {camera_height_mm:.0f} mm")
     if use_cam_offset:
-        print(f"[pipeline] Camera→robot offset: "
-              f"ΔX={cam_offset_x:.1f} mm, ΔY={cam_offset_y:.1f} mm")
+        _log(f"[pipeline] Camera→robot offset: "
+             f"ΔX={cam_offset_x:.1f} mm, ΔY={cam_offset_y:.1f} mm")
     if use_size_check:
-        print(f"[pipeline] Expected object size: "
-              f"{exp_obj_w:.0f}×{exp_obj_h:.0f} mm (±{obj_tol_pct:.0f}%)")
+        _log(f"[pipeline] Expected object size: "
+             f"{exp_obj_w:.0f}×{exp_obj_h:.0f} mm (±{obj_tol_pct:.0f}%)")
 
     # --- Load calibration files (optional) ---------------------------
     calib_path = os.path.join(
@@ -254,9 +270,9 @@ def run_pipeline(config_path: str | None = None):
     calib: CalibrationResult | None = None
     if calibration_exists(calib_path):
         calib = load_calibration(calib_path)
-        print(f"[pipeline] Camera calibration loaded (RMS={calib.rms_error:.4f})")
+        _log(f"[pipeline] Camera calibration loaded (RMS={calib.rms_error:.4f})")
     else:
-        print("[pipeline] No camera calibration found - skipping undistortion.")
+        _log("[pipeline] No camera calibration found - skipping undistortion.")
 
     homog_cfg = cfg.get("homography", {})
     homog_path = os.path.join(
@@ -265,9 +281,9 @@ def run_pipeline(config_path: str | None = None):
     homog: HomographyData | None = None
     if homography_exists(homog_path):
         homog = load_homography(homog_path)
-        print(f"[pipeline] Homography loaded (err={homog.reprojection_error:.2f} mm)")
+        _log(f"[pipeline] Homography loaded (err={homog.reprojection_error:.2f} mm)")
     else:
-        print("[pipeline] No homography found - output will be in pixels.")
+        _log("[pipeline] No homography found - output will be in pixels.")
 
     use_belt = belt_speed > 0 and belt_delay > 0 and homog is not None
 
@@ -278,21 +294,49 @@ def run_pipeline(config_path: str | None = None):
     )
     delay  = max(1, int(1000 / source.fps))
 
-    print(f"[pipeline] Opened {source}")
-    print(f"[pipeline] Press 'q' to quit.\n")
+    _log(f"[pipeline] Opened {source}")
+    _log(f"[pipeline] Press 'q' to quit.")
 
     object_present = False
 
     frame_num = 0
+    prev_time = time.perf_counter()
 
-    while True:
+    # Robot coordinate tracking (for dashboard display)
+    robot_last_x: float | None = None
+    robot_last_y: float | None = None
+    robot_last_angle: float | None = None
+    robot_last_valid: float | None = None
+    robot_last_frame: int = 0
+    robot_total_sends: int = 0
+
+    # Config summary strings for dashboard
+    _source_path = cfg["input"]["video_path"]
+    _resolution_str = f"{cam_width}×{cam_height} @ {cam_fps:.0f} fps"
+    _threshold_str = f"{thresh_val} / {thresh_max}"
+    _roi_str = "disabled"
+    if use_roi:
+        _roi_str = (f"{roi_cfg.get('x_start', 0)*100:.0f}%–{roi_cfg.get('x_end', 1)*100:.0f}% × "
+                    f"{roi_cfg.get('y_start', 0)*100:.0f}%–{roi_cfg.get('y_end', 1)*100:.0f}%")
+
+    # Start dashboard
+    if dashboard is not None:
+        dashboard.start()
+
+    try:
+      while True:
         frame = source.read()
         if frame is None:
-            print("[pipeline] End of source.")
+            _log("[pipeline] End of source.")
             break
 
         frame_num += 1
         t0 = time.perf_counter()
+
+        # Actual FPS
+        dt_frame = t0 - prev_time
+        actual_fps = 1.0 / dt_frame if dt_frame > 0 else 0.0
+        prev_time = t0
 
         # Step 1: Undistort (if calibrated)
         if calib is not None:
@@ -367,7 +411,7 @@ def run_pipeline(config_path: str | None = None):
                 w_err = abs(det_w - exp_obj_w) / exp_obj_w * 100
                 h_err = abs(det_h - exp_obj_h) / exp_obj_h * 100
                 if w_err > obj_tol_pct or h_err > obj_tol_pct:
-                    print(
+                    _log(
                         f"[WARNING] Object size {det_w:.1f}×{det_h:.1f} mm "
                         f"deviates from expected {exp_obj_w:.0f}×{exp_obj_h:.0f} mm "
                         f"(w_err={w_err:.1f}%, h_err={h_err:.1f}%)"
@@ -383,68 +427,128 @@ def run_pipeline(config_path: str | None = None):
         coord = pick_coord or world_coord  # None when no detection
         tracker_result = tracker.update(coord)
 
+        robot_sent_this_frame = False
+
         if connected:
             try:
                 if tracker_result.should_send and tracker_result.coord is not None:
                     c = tracker_result.coord
                     rtde_sender.send_pose(c.x_mm, c.y_mm, c.angle_deg, 1.0, result.part_id if result.part_id else "Part_0")
                     object_present = True
+                    robot_sent_this_frame = True
+                    robot_last_x = c.x_mm
+                    robot_last_y = c.y_mm
+                    robot_last_angle = c.angle_deg
+                    robot_last_valid = 1.0
+                    robot_last_frame = frame_num
+                    robot_total_sends += 1
                     part_tag = f" part={result.part_id}" if result is not None and result.part_id else ""
-                    print(f"[SEND] Pose sent to robot: x={c.x_mm:.1f} mm, "
-                          f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg{part_tag}")
+                    _log(f"[SEND] Pose sent to robot: x={c.x_mm:.1f} mm, "
+                         f"y={c.y_mm:.1f} mm, angle={c.angle_deg:.1f} deg{part_tag}")
                 elif object_present and coord is None and tracker.state == "IDLE":
                     rtde_sender.send_pose(*no_object_signal)  # Indicate no object
                     object_present = False
-                    print(f"[SEND] No-object signal sent to robot.")
+                    robot_last_x = no_object_signal[0]
+                    robot_last_y = no_object_signal[1]
+                    robot_last_angle = no_object_signal[2]
+                    robot_last_valid = no_object_signal[3]
+                    robot_last_frame = frame_num
+                    robot_total_sends += 1
+                    _log(f"[SEND] No-object signal sent to robot.")
             except Exception as e:
-                print(f"[ERROR] Failed to send pose to robot: {e}")
+                _log(f"[ERROR] Failed to send pose to robot: {e}")
                 connected = False
 
         if not connected and frame_num % reconnect_interval == 0:
             try:
                 rtde_sender.connect()
                 connected = True
-                print("[INFO] Reconnected to robot.")
+                _log("[INFO] Reconnected to robot.")
             except Exception as e:
-                print(f"[WARNING] Still cannot reconnect to robot: {e}")
-            
+                _log(f"[WARNING] Still cannot reconnect to robot: {e}")
+
+        # Processing time
+        dt_ms = (time.perf_counter() - t0) * 1000
 
         # Step 8: Overlay & display
         if result is not None:
             _draw_overlay(frame, result, cfg_display, world_coord, pick_coord)
-            dt_ms = (time.perf_counter() - t0) * 1000
-            prt = f"  part={result.part_id}" if result.part_id else ""
 
-            if pick_coord is not None:
-                print(
-                    f"[frame {frame_num:>5d}]  "
-                    f"px=({result.center_x:.0f},{result.center_y:.0f})  "
-                    f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
-                    f"pick=({pick_coord.x_mm:.1f},{pick_coord.y_mm:.1f}) mm  "
-                    f"angle={pick_coord.angle_deg:.1f} deg  "
-                    f"conf={result.confidence:.2f}{prt}  "
-                    f"({dt_ms:.1f} ms)"
-                )
-            elif world_coord is not None:
-                print(
-                    f"[frame {frame_num:>5d}]  "
-                    f"px=({result.center_x:.0f},{result.center_y:.0f})  "
-                    f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
-                    f"angle={world_coord.angle_deg:.1f} deg  "
-                    f"conf={result.confidence:.2f}{prt}  "
-                    f"({dt_ms:.1f} ms)"
-                )
-            else:
-                print(
-                    f"[frame {frame_num:>5d}]  "
-                    f"x={result.center_x:7.1f}  "
-                    f"y={result.center_y:7.1f}  "
-                    f"angle={result.angle:6.1f} deg  "
-                    f"conf={result.confidence:.2f}{prt}  "
-                    f"({dt_ms:.1f} ms)"
-                )
+        # Step 9: Dashboard or print
+        if dashboard is not None:
+            dash_data = DashboardData(
+                frame_num=frame_num,
+                detected=result is not None,
+                center_x=result.center_x if result else 0.0,
+                center_y=result.center_y if result else 0.0,
+                angle_deg=result.angle if result else 0.0,
+                bbox_w=result.width if result else 0.0,
+                bbox_h=result.height if result else 0.0,
+                confidence=result.confidence if result else 0.0,
+                part_id=result.part_id if result and result.part_id else "",
+                world_x_mm=world_coord.x_mm if world_coord else None,
+                world_y_mm=world_coord.y_mm if world_coord else None,
+                world_angle_deg=world_coord.angle_deg if world_coord else None,
+                pick_x_mm=pick_coord.x_mm if pick_coord else None,
+                pick_y_mm=pick_coord.y_mm if pick_coord else None,
+                pick_angle_deg=pick_coord.angle_deg if pick_coord else None,
+                robot_sent_this_frame=robot_sent_this_frame,
+                robot_last_x_mm=robot_last_x,
+                robot_last_y_mm=robot_last_y,
+                robot_last_angle_deg=robot_last_angle,
+                robot_last_valid=robot_last_valid,
+                robot_last_frame=robot_last_frame,
+                robot_total_sends=robot_total_sends,
+                robot_object_present=object_present,
+                proc_time_ms=dt_ms,
+                actual_fps=actual_fps,
+                robot_connected=connected,
+                calib_loaded=calib is not None,
+                homog_loaded=homog is not None,
+                belt_enabled=use_belt,
+                classifier_enabled=classifier is not None,
+                tracker_state=tracker.state,
+                source_path=_source_path,
+                resolution=_resolution_str,
+                threshold=_threshold_str,
+                min_area=min_area,
+                roi_info=_roi_str,
+            )
+            dashboard.update(dash_data)
         else:
-            print(f"[frame {frame_num:>5d}]  No object detected")
+            # Fallback: original print output
+            if result is not None:
+                prt = f"  part={result.part_id}" if result.part_id else ""
+                if pick_coord is not None:
+                    print(
+                        f"[frame {frame_num:>5d}]  "
+                        f"px=({result.center_x:.0f},{result.center_y:.0f})  "
+                        f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
+                        f"pick=({pick_coord.x_mm:.1f},{pick_coord.y_mm:.1f}) mm  "
+                        f"angle={pick_coord.angle_deg:.1f} deg  "
+                        f"conf={result.confidence:.2f}{prt}  "
+                        f"({dt_ms:.1f} ms)"
+                    )
+                elif world_coord is not None:
+                    print(
+                        f"[frame {frame_num:>5d}]  "
+                        f"px=({result.center_x:.0f},{result.center_y:.0f})  "
+                        f"world=({world_coord.x_mm:.1f},{world_coord.y_mm:.1f}) mm  "
+                        f"angle={world_coord.angle_deg:.1f} deg  "
+                        f"conf={result.confidence:.2f}{prt}  "
+                        f"({dt_ms:.1f} ms)"
+                    )
+                else:
+                    print(
+                        f"[frame {frame_num:>5d}]  "
+                        f"x={result.center_x:7.1f}  "
+                        f"y={result.center_y:7.1f}  "
+                        f"angle={result.angle:6.1f} deg  "
+                        f"conf={result.confidence:.2f}{prt}  "
+                        f"({dt_ms:.1f} ms)"
+                    )
+            else:
+                print(f"[frame {frame_num:>5d}]  No object detected")
 
         cv.imshow("Flying Picker - Detection", frame)
 
@@ -453,8 +557,12 @@ def run_pipeline(config_path: str | None = None):
 
         # Quit on 'q'
         if cv.waitKey(delay) & 0xFF == ord("q"):
-            print("\n[pipeline] Quit by user.")
+            _log("[pipeline] Quit by user.")
             break
+
+    finally:
+        if dashboard is not None:
+            dashboard.stop()
 
     source.release()
     rtde_sender.close()
