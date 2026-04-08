@@ -194,7 +194,15 @@ def run_pipeline(config_path: str | None = None):
     cam_fps = cam_cfg.get("fps", 60.0)
 
     # --- Unpack config -----------------------------------------------
-    video_path = os.path.join(_PROJECT_ROOT, cfg["input"]["video_path"])
+    _raw_video = cfg["input"].get("video_path", "")
+    if _raw_video:
+        video_path = os.path.join(_PROJECT_ROOT, _raw_video)
+        if not os.path.isfile(video_path):
+            _log(f"[pipeline] Video file not found: {video_path}")
+            _log("[pipeline] Falling back to live camera (Picamera2).")
+            video_path = ""
+    else:
+        video_path = ""
 
     blur_kernel = cfg["preprocess"]["blur_kernel_size"]
     thresh_val  = cfg["preprocess"]["threshold_value"]
@@ -311,7 +319,7 @@ def run_pipeline(config_path: str | None = None):
     robot_total_sends: int = 0
 
     # Config summary strings for dashboard
-    _source_path = cfg["input"]["video_path"]
+    _source_path = video_path if video_path else "picamera2 (live)"
     _resolution_str = f"{cam_width}×{cam_height} @ {cam_fps:.0f} fps"
     _threshold_str = f"{thresh_val} / {thresh_max}"
     _roi_str = "disabled"
