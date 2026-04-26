@@ -22,7 +22,8 @@ camera:
 # Set video_path to "" (empty) to use the live Pi camera via Picamera2
 # Set video_path to a number like "0" or "1" for USB webcams via OpenCV
 input:
-  video_path: ""
+  vidoe_path: "public/IMG_6256.MOV"
+  #video_path: ""
 # --- Preprocessing ---
 preprocess:
   blur_kernel_size: 3        # Gaussian blur kernel (must be odd)
